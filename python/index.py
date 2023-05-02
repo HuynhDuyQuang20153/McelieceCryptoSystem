@@ -4,7 +4,6 @@ from compress import *
 from excel import *
 from txt import *
 import numpy as np
-from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.preprocessing import LabelEncoder
 
 
@@ -78,11 +77,12 @@ def decrypt(k, n, matrix, direc_ma_hoa, public_key, private_key, orther):
 
 def read_data_file():
     # Create path to local of data 
-    data_path = os.path.join(os.getcwd(), "..", "data", "data.txt")
+    data_path = os.path.join(os.getcwd(), "..", "data", "test.txt")
     with open(data_path, encoding='utf-8') as f:
         corpus = f.readlines()
 
-    corpus = [line.strip() for line in corpus]  # Loại bỏ ký tự xuống dòng ở cuối mỗi dòng
+    # Remove carriage return at the end of each line
+    corpus = [line.strip() for line in corpus]  
 
     # Split words into tokens
     tokens = [doc.split() for doc in corpus]
@@ -95,8 +95,15 @@ def read_data_file():
     # Representing documents as integer matrices
     X = [[label_encoder.transform([token])[0] for token in doc] for doc in tokens]
 
-    # Convert list to numpy matrix
-    input_matrix = np.array(X)
+    # Find the maximum number of elements in sublists
+    max_length = max([len(row) for row in X])
+
+    # Add zero values to the empty places to create a matrix of size kxn
+    input = np.zeros((len(X), max_length))
+    for i, row in enumerate(X):
+        input[i, :len(row)] = row
+
+    input_matrix = input.astype(int)
 
     # Check shape of matrix
     if input_matrix.ndim == 1:
@@ -128,12 +135,19 @@ def save_data(private_key, public_key, orther, direc_cipherText, direc_plaintTex
 
 
 def back_text(encoder, plainText):
+    # Generate initial list of sublists from matrix
+    X = []
+    for row in plainText:
+        non_zero = np.nonzero(row)[0]
+        X.append(list(row[non_zero]))
+
     # Convert the matrix back to a list of documents
     texts = []
-    for doc in plainText:
+    for doc in X:
         words = encoder.inverse_transform(doc)
         text = " ".join(words)
         texts.append(text)
+
     return texts
 
 
@@ -161,7 +175,6 @@ if __name__ == '__main__':
         print("\t****************************************************************************")
 
         # Text recovery
-        # text = back_text(direc_plaintText['plainText'], vectorizer)
         text = back_text(encoder, direc_plaintText['plainText'])
 
         # Save data into 'xlsx' file, 'txt' file and '.npz' file
