@@ -3,7 +3,7 @@ import os
 
 
 class Excel:
-    def __init__(self, private_key, public_key, orther, direc_cipherText, direc_plaintText, matrix):
+    def __init__(self, private_key, public_key, direc_cipherText, direc_plaintText, matrix):
         self.S = private_key['S']
         self.P = private_key['P']
         self.G = private_key['G']
@@ -16,11 +16,7 @@ class Excel:
 
 
     def Excel_Write(self):
-        # The path to folder where the data is to be saved
         dir_path = os.path.join(os.getcwd(), "..", "data", "Excel_file")
-
-
-        # Find the largest index of the folder Data_x created
         max_index = 0
         for filename in os.listdir(dir_path):
             if filename.startswith("Excel_folder_") and os.path.isdir(os.path.join(dir_path, filename)):
@@ -28,13 +24,9 @@ class Excel:
                 if index > max_index:
                     max_index = index
 
-
-        # Create a new directory with index max_index + 1
         new_dir_path = os.path.join(dir_path, "Excel_folder_" + str(max_index + 1))
         os.mkdir(new_dir_path)
 
-
-        # Create a workbook object containing G, S, P, Gp, Cp, y, yy_, x, matrix
         workbook = openpyxl.Workbook()
         sheet_G = workbook.active
         sheet_G.title = "G"
@@ -50,14 +42,11 @@ class Excel:
         data_path = os.path.join(new_dir_path, file_name)
         workbook.save(data_path)
 
-
-        # Save data
         for i in range(self.G.shape[0]):
             for j in range(self.G.shape[1]):
                 cell_G = sheet_G.cell(row=i+1, column=j+1)
                 cell_G.value = self.G[i][j]
         print(f"\t- Save matrix G  in: {data_path}")
-
 
         for i in range(self.S.shape[0]):
             for j in range(self.S.shape[1]):
@@ -65,20 +54,17 @@ class Excel:
                 cell_S.value = self.S[i][j]
         print(f"\t- Save matrix S  in: {data_path}")
 
-
         for i in range(self.P.shape[0]):
             for j in range(self.P.shape[1]):
                 cell_P = sheet_P.cell(row=i+1, column=j+1)
                 cell_P.value = self.P[i][j]
         print(f"\t- Save matrix P  in: {data_path}")
 
-
         for i in range(self.Gp.shape[0]):
             for j in range(self.Gp.shape[1]):
                 cell_Gp = sheet_Gp.cell(row=i+1, column=j+1)
                 cell_Gp.value = self.Gp[i][j]
         print(f"\t- Save matrix G' in: {data_path}")
-
 
         if self.vector_cipher.ndim == 1:
             for i in range(len(self.vector_cipher)):
@@ -93,7 +79,6 @@ class Excel:
                     cell_c.value = self.vector_cipher[i][j]
             print(f"\t- Save vector C' in: {data_path}")
 
-
         for i in range(self.ciphertext.shape[0]):
             for j in range(self.ciphertext.shape[1]):
                 cell_y = sheet_y.cell(row=i+1, column=j+1)
@@ -106,7 +91,6 @@ class Excel:
                 cell_yy_ = sheet_yy_.cell(row=i+1, column=j+1)
                 cell_yy_.value = self.vector_plain[i][j]
         print(f"\t- Save vector y' in: {data_path}")
-
 
         if self.plainText.ndim == 1:
             for i in range(len(self.plainText)):
@@ -121,7 +105,6 @@ class Excel:
                     cell_x.value = self.plainText[i][j]
             print(f"\t- Save plain x   in: {data_path}")
 
-
         if self.matrix.ndim == 1:
             for i in range(len(self.matrix)):
                 cell_matrix = sheet_matrix.cell(row=1, column=i+1)
@@ -135,6 +118,4 @@ class Excel:
                     cell_matrix.value = self.matrix[i][j]
             print(f"\t- Save matrix    in: {data_path}")
 
-
-        # Save file Excel
         workbook.save(data_path)
