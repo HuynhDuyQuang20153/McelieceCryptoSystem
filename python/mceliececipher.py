@@ -19,7 +19,6 @@ class McElieceCipher:
         self.x = None
         self.xS = None
         self.y_ = None
-        self.yy_= None
         self.Cp = None
 
 
@@ -36,7 +35,7 @@ class McElieceCipher:
     def encrypt(self, x, Gp, Gp_col, t):
         if Gp is not None and x is not None:
             self.Cp = multi_matrix(x, Gp)
-            print(f"\t   --> Successfully create generated ciphertext vector Cp = x * Gp")
+            print(f"\t   --> Successfully create generated ciphertext vector Cp[{self.Cp.shape[0]}, {self.Cp.shape[1]}] = x[{x.shape[0]},{x.shape[1]}] * Gp[{Gp.shape[0]}, {Gp.shape[1]}]")
 
             self.e = random_matrix(t, Gp_col)
             self.y = cipherText(self.Cp, self.e)
@@ -45,11 +44,12 @@ class McElieceCipher:
     def decrypt(self, matrix, y, P_inv, S_inv, S):
         if P_inv is not None and S_inv is not None:
             print(f"\t- Creating multiply matrix .....")
-            self.y_ = multi_matrix(y, P_inv)
-            print(f"\t   --> Successfully create generated ciphertext vector y' = y * P^-1")
+            # self.y_ = multi_matrix(y, P_inv)
+            # print(f"\t   --> Successfully create generated ciphertext vector y' = y * P^-1")
 
             self.xS = multi_matrix(matrix, S)
             print(f"\t   --> Successfully create value xS")
 
             self.x = multi_matrix(self.xS, S_inv)
             print(f"\t   --> Successfully restore the original matrix x = xS * S^-1")
+

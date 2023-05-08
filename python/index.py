@@ -1,16 +1,37 @@
 from sklearn.preprocessing import LabelEncoder
 import multiprocessing as mp
 from mceliececipher import *
+from excel_output import *
+from excel_input import *
 from mathutils import *
 from compress import *
-from df_Excel import *
-from excel import *
 import numpy as np
-from txt import *
+import joblib
 import os 
 
 
-def read(choose):
+def read_output(choose, path_save):
+    try:
+        if choose == '2':
+            with open(path_save, encoding='utf-8') as f:
+                read_output = f.readlines()
+
+            read_output = [line.strip() for line in read_output]  
+            return read_output
+
+        elif choose == '1':
+            header = list(range(pd.read_excel(path_save).shape[1]))
+            df = pd.read_excel(path_save, header=None)
+            df.columns = header + df.columns[len(header):].tolist()
+
+            data = np.array(df)
+            return data
+
+    except Exception as e:
+        print("ERROR READ OUTPUT FILE: ", e)
+
+
+def read_input(choose):
     try:
         if choose == '2':
             file_name_1 = 'test.txt'
@@ -46,8 +67,8 @@ def read(choose):
             return text, data_line, matrix_text, already_assigned, t, matrix_text.shape[0], input_matrix_col, encoder
 
         elif choose == '1':
-            file_name_2 = "def.xlsx"
-            data_path = os.path.join(os.getcwd(), "..", "data", file_name_2)
+            file_name_1 = "text_2.xlsx"
+            data_path = os.path.join(os.getcwd(), "..", "data", file_name_1)
 
             header = list(range(pd.read_excel(data_path).shape[1]))
             df = pd.read_excel(data_path, header=None)
@@ -88,7 +109,7 @@ def read(choose):
             return text, data_line, matrix_text, already_assigned, t, matrix_text.shape[0], input_matrix_col, encoder
 
     except Exception as e:
-        print("ERROR READ FILE: ", e)
+        print("ERROR READ INPUT FILE: ", e)
 
 
 def key(t, k, n):
@@ -136,55 +157,76 @@ def encrypt(t, k, n, matrix_text, public_key, orther):
         print("ERROR ENCRYPT:", e)
 
 
-def decrypt(k, n, matrix_text, direc_cipherText, public_key, private_key, orther):
+def decrypt(k, n, matrix_text, matrix_output, public_key, private_key, orther):
     try:
         S = private_key['S']
         t = public_key['t']
         P_inv = orther['P_inv']
         S_inv = orther['S_inv']
-        y = direc_cipherText['ciphertext']
+        y = matrix_output
 
         mc = McElieceCipher(k, n, t)
         mc.decrypt(matrix_text, y, P_inv, S_inv, S)
 
-        direc_cipherText = {
+        direc_plaintText = {
             'vector': mc.y_,
             'xS': mc.xS,   
             'plainText': mc.x
         }
-        return direc_cipherText
+        return direc_plaintText
 
 
     except Exception as e:
         print("ERROR DECRYPT:", e)
 
 
-def save_file(choose_type_file, private_key, public_key, direc_cipherText, direc_plaintText, matrix, texts, data_line):
+def save_cipher_file(choose_type_file, already_assigned, encoder, t, k, n, orther, private_key, direc_cipherText, data_line):
     try:
-        print("\n\n\t************************* SAVE MATRIX IN '.XLSX' FILE *************************")
-        excel = Excel(private_key, public_key, direc_cipherText, direc_plaintText, matrix)
-        excel.Excel_Write()
-
-        print("\n\n\t************************** SAVE MATRIX IN '.NPZ' FILE *************************")
-        compress = Compress(private_key, public_key, direc_cipherText, direc_plaintText, matrix)
-        compress.Compress_Write()
-
-        if choose_type_file == '1':
-            print("\n\n\t*************************** SAVE DATAFRAME IN '.XLSX' FILE *************************")
-            df_excel = df_Excel(data_line)
-            df_excel.df_Write()
-
-        elif choose_type_file == '2':
-            print("\n\n\t*************************** SAVE TEXT IN '.TXT' FILE **************************")
-            txt = TXT(data_line, texts)
-            txt.TXT_Write()
+        print("\n\n\t************************* SAVE DATA CIPHER *************************")
+        excel = Excel_input(choose_type_file, already_assigned, encoder, t, k, n, orther, private_key, direc_cipherText, data_line)
+        excel.Excel_Write_input()
+        return excel.path_location_save
 
     except Exception as e:
-        print("ERROR SAVE FILE:", e)
+        print("ERROR SAVE DATA CIPHER:", e)
 
 
-def backtext(encoder, already_assigned, plainText):
+def save_plain_file(choose_type_file, already_assigned, encoder, texts, path_location_save, data_line):
     try:
+        print("\n\n\t***************************** SAVE DATA PLAIN ******************************")
+        excel = Excel_output(choose_type_file, already_assigned, encoder, texts, path_location_save, data_line)
+        excel.Excel_Write_output()
+
+    except Exception as e:
+        print("ERROR SAVE DATA PLAIN:", e)
+
+
+def save_compress_file(text, data_line, matrix_text, already_assigned, t, k, n, 
+                        encoder, private_key, public_key, orther, direc_cipherText, 
+                        path_location_save, matrix_output, direc_plaintText, text_recovery, texts):
+    try:
+        print("\n\n\t***************************** SAVE COMPRESS DATA ***************************")
+        compress = Compress(text, data_line, matrix_text, already_assigned, t, k, n, 
+                            encoder, private_key, public_key, orther, direc_cipherText, 
+                            path_location_save, matrix_output, direc_plaintText, text_recovery, texts)
+        compress.Compress_Write()
+
+    except Exception as e:
+        print("ERROR SAVE DATA COMPRESS:", e)
+
+def backtext(already_assigned, direc_plaintText):
+    try:
+        plainText = direc_plaintText['plainText']
+        dir_path = os.path.join(os.getcwd(), "..", "data", "Save_file")
+        max_index = 0
+        for filename in os.listdir(dir_path):
+            if filename.startswith("Save_turn_") and os.path.isdir(os.path.join(dir_path, filename)):
+                index = int(filename.split("_")[2])
+                if index > max_index:
+                    max_index = index
+        new_dir_path = os.path.join(dir_path, "Save_turn_" + str(max_index))
+        encoder = joblib.load(os.path.join(new_dir_path, "CipherText", "encoder.joblib"))
+
         if already_assigned is not None:
             X = []
             for i, row in enumerate(plainText):
@@ -192,9 +234,13 @@ def backtext(encoder, already_assigned, plainText):
                     X.append(list(row))
 
                 elif not np.all(already_assigned[i, :len(row)]):
-                    non_zero = np.nonzero(row)[:len(row)]
-                    X.append(list(row[non_zero]))
-        
+                    positive_indices = np.where(row >= 0)[0][:len(row)]
+                    X.append(list(row[positive_indices]))
+
+            for i in range(len(X)):
+                for j in range(len(X[i])):
+                    X[i][j] = int(X[i][j])
+
             texts = []
             for doc in X:
                 words = encoder.inverse_transform(doc)
@@ -216,51 +262,41 @@ def backtext(encoder, already_assigned, plainText):
 
 
 if __name__ == '__main__':
-    choose_type_file = input("DO YOU WANT TO INPUT DATA FROM EXCEL OR TXT (1 or 2)? ")
+    choose_input = input("- UPLOAD DATA FILE (y or n)? ")
 
-    pool = mp.Pool(processes=4)
+    if choose_input == 'y':
+        choose_type_file = input("- DO YOU WANT TO INPUT DATA FROM EXCEL OR TXT (1 or 2)? ")
 
-    data_ = pool.starmap(read, choose_type_file)
-    text, data_line, matrix_text, already_assigned, t, k, n, encoder = get_input_data(data_)
+        text, data_line, matrix_text, already_assigned, t, k, n, encoder = read_input(choose_type_file)
+        private_key, public_key, orther = key(t, k, n)
+        direc_cipherText = encrypt(t, k, n, matrix_text, public_key, orther)
+        path_location_save = save_cipher_file(choose_type_file, already_assigned, encoder, t, k, n, orther, private_key, direc_cipherText, data_line)
 
-    args_list_tkn = [(t, k, n)]
-    key_ = pool.starmap(key, args_list_tkn)
-    private_key, public_key, orther = get_key_data(key_)
+        choose_input_2 = input("\n\n\n- DO YOU WANT TO UPLOAD CIPHER FILE TOO (y or n)? ")
 
-    args_list_encrypt = [(t, k, n, matrix_text, public_key, orther)]
-    enc_ = pool.starmap(encrypt, args_list_encrypt)
-    direc_cipherText = get_encrypt_data(enc_)
+        if choose_input_2 == 'n':
+            print("\t\t---> EXIT PROGRAM !!!")
 
-    args_list_decrypt = [(k, n, matrix_text, direc_cipherText, public_key, private_key, orther)]
-    dec_ = pool.starmap(decrypt, args_list_decrypt)
-    direc_plaintText = get_decrypt_data(dec_)
+        elif choose_input_2 == 'y':
+            matrix_output = read_output(choose_type_file, path_location_save)
+            direc_plaintText = decrypt(k, n, matrix_text, matrix_output, public_key, private_key, orther)
 
-    args_list_backtext = [(encoder, already_assigned, direc_plaintText['plainText'])]
-    rec_ = pool.starmap(backtext, args_list_backtext)
-    text_recovery, texts = get_backtext(rec_)
+            if np.array_equal(direc_plaintText['plainText'], matrix_text):
+                print("\n\n\t****************************************************************************")        
+                print("\t*** The decoding result matches the original matrix: Matrix == PlainText ***")
+                print("\t****************************************************************************")
 
-    pool.close()
-    pool.join()
+                text_recovery, texts = backtext(already_assigned, direc_plaintText)
+                save_plain_file(choose_type_file, already_assigned, encoder, texts, path_location_save, data_line)
+                save_compress_file(text, data_line, matrix_text, already_assigned, t, k, n, 
+                        encoder, private_key, public_key, orther, direc_cipherText, 
+                        path_location_save, matrix_output, direc_plaintText, text_recovery, texts)
 
-    if np.array_equal(direc_plaintText['plainText'], matrix_text):
-        print("\n\n\t****************************************************************************")        
-        print("\t*** The decoding result matches the original matrix: Matrix == PlainText ***")
-        print("\t****************************************************************************")
+            else:
+                print("\n\n\t****************************************************************************")        
+                print("\t*** The decoding result does not match the original matrix: Matrix != PlainText ***")
+                print("\t******************************************************************************")
 
-        process_save_data = mp.Process(target=save_file, args=(choose_type_file, private_key, public_key, direc_cipherText, direc_plaintText, matrix_text, texts, data_line))
-        process_save_data.start()
-        process_save_data.join()  
+    if choose_input == 'n':
+        print("\t\t---> EXIT PROGRAM !!!")
 
-        if choose_type_file == '1':
-            print(f"\t- Text: \n", data_line)
-
-        elif choose_type_file == '2':
-            print(f"\t- Text: \n", text)
-
-        print(f"\n\t- Text_recovery: \n", text_recovery)
-
-    else:
-        print("\t*!*!*! The decoding result does not match the original matrix: Matrix != PlainText *!*!*!")
-        print("\t******************************************************************************")
-        print("\t- Matrix_text: \n", matrix_text)
-        print(f"\n\t- Matrix_plain: \n", direc_plaintText['plainText'])

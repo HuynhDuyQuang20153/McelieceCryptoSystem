@@ -1,4 +1,72 @@
 import numpy as np
+from joblib import Parallel, delayed
+
+
+def brute_force(A, B):
+    n, m, p = A.shape[0], A.shape[1], B.shape[1]
+    C = np.zeros((n, p))
+    for i in range(n):
+        for j in range(p):
+            for k in range(m):
+                C[i][j] += A[i][k]*B[k][j]
+    return C
+
+
+def split(matrix):
+    n = len(matrix)
+    return matrix[:n//2, :n//2], matrix[:n//2, n//2:], matrix[n//2:, :n//2], matrix[n//2:, n//2:]
+
+
+def strassen_nxn(A, B, m):
+    if len(A) <= 2:
+        return brute_force(A, B)
+
+    A11, A12, A21, A22 = split(A)
+    B11, B12, B21, B22 = split(B)
+
+    arg_list = [(np.add(A11,A22), np.add(B11,B22), m), 
+                 (np.add(A21,A22), B11, m), (A11, np.subtract(B12,B22), m), 
+                 (A22, np.subtract(B21,B11), m), (np.add(A11,A12), B22, m), 
+                 (np.subtract(A11,A21), np.add(B11,B12), m), 
+                 (np.subtract(A12,A22), np.add(B21,B22), m)]
+    
+    results = Parallel(n_jobs=7)(delayed(strassen_nxn)(A, B, m) for A, B, m in arg_list)
+    p1, p2, p3, p4, p5, p6, p7 = get_strassen(results)
+
+    C11 = np.add(np.subtract(np.add(p1,p4), p5),p7) 
+    C12 = np.add(p3,p5)
+    C21 = np.add(p2,p4) 
+    C22 = np.subtract(np.subtract(np.add(p3, p1), p2), p6)
+
+    C = np.vstack((np.hstack((C11, C12)), np.hstack((C21, C22))))
+    C = C[:m, :m]
+    return C
+
+
+def strassen_nxm(A, B, n, m):
+    if len(A) <= 2:
+        return brute_force(A, B)
+
+    A11, A12, A21, A22 = split(A)
+    B11, B12, B21, B22 = split(B)
+
+    arg_list = [(np.add(A11,A22), np.add(B11,B22), n, m), 
+                 (np.add(A21,A22), B11, n, m), (A11, np.subtract(B12,B22), n, m), 
+                 (A22, np.subtract(B21,B11), n, m), (np.add(A11,A12), B22, n, m), 
+                 (np.subtract(A11,A21), np.add(B11,B12), n, m), 
+                 (np.subtract(A12,A22), np.add(B21,B22), n, m)]
+    
+    results = Parallel(n_jobs=7)(delayed(strassen_nxm)(A, B, n, m) for A, B, n, m in arg_list)
+    p1, p2, p3, p4, p5, p6, p7 = get_strassen(results)
+
+    C11 = np.add(np.subtract(np.add(p1,p4), p5),p7) 
+    C12 = np.add(p3,p5)
+    C21 = np.add(p2,p4) 
+    C22 = np.subtract(np.subtract(np.add(p3, p1), p2), p6)
+
+    C = np.vstack((np.hstack((C11, C12)), np.hstack((C21, C22))))
+    C = C[:n, :m]
+    return C
 
 
 def can_create_matrix(X):
@@ -21,7 +89,8 @@ def can_create_matrix(X):
 def paddingMatrix(X):
     try:
         max_length = max([len(row) for row in X])
-        input = np.zeros((len(X), max_length))
+        input = np.full((len(X), max_length), -1)
+
         already_assigned = np.zeros_like(input, dtype=bool)
 
         for i, row in enumerate(X):
@@ -60,10 +129,17 @@ def create_invertible_S_inverse_S_inv(k):
             test = np.linalg.det(S)
             if test != 0:
                 S_inv = np.linalg.inv(S).astype(int)
-                SS_inv = np.dot(S, S_inv)
+                n = len(S)
+                m = 2 ** int(np.ceil(np.log2(max(len(S), len(S_inv), len(S[0]), len(S_inv[0])))))  
+                A_new = np.zeros((m, m))
+                A_new[:len(S), :len(S[0])] = S
+                B_new = np.zeros((m, m))
+                B_new[:len(S_inv), :len(S_inv[0])] = S_inv
+                SS_inv = strassen_nxn(A_new, B_new, n)
+
                 if np.allclose(SS_inv, I):
                     print(f"\t   --> Successfully create Invertible matrix S[{k},{k}]") 
-                    print(f"\t   --> Number of random time S: ", count)
+                    print(f"\t   --> Number time of random S: ", count)
                     print(f"\t   --> Successfully create Inverse matrix S^-1")
                     return S, S_inv
                 
@@ -100,8 +176,21 @@ def create_permutation_P(n):
 def create_matrix_Gp(G, S, P):
     try:
         print(f"\t- Creating matrix Gp .....")
-        Gp = np.dot(np.dot(S, G), P)
-        print(f"\t   --> Successfully create matrix Gp[{G.shape[0]},{G.shape[1]}]")
+        n = len(G)
+        m = len(P)
+        q = 2 ** int(np.ceil(np.log2(max(len(G), len(P), len(S), len(G[0]), len(P[0]), len(S[0])))))  
+        A_new = np.zeros((q, q))
+        A_new[:len(G), :len(G[0])] = G
+        B_new = np.zeros((q, q))
+        B_new[:len(P), :len(P[0])] = P
+        C_new = np.zeros((q, q))
+        C_new[:len(S), :len(S[0])] = S
+        Gp_1 = strassen_nxn(C_new, A_new, n)
+        Gp_1_new = np.zeros((q, q))
+        Gp_1_new[:len(Gp_1), :len(Gp_1[0])] = Gp_1
+        Gp = strassen_nxm(Gp_1_new, B_new, n, m)
+
+        print(f"\t   --> Successfully create matrix Gp[{Gp.shape[0]},{Gp.shape[1]}] = S*G*P")
         return Gp
     
     except ValueError as e:
@@ -141,14 +230,17 @@ def cipherText(Cp, e):
         print(f"\t- Creating generated ciphertext y .....")
         if Cp.ndim == 1:
             y = np.add(Cp, e)
-            print(f"\t   --> Successfully create generated ciphertext y = Cp + e")
+            print(f"\t   --> Successfully create generated ciphertext y[{y.shape[0]},{y.shape[1]}] = Cp + e")
             return y
         
         elif Cp.ndim > 1 or len(Cp.shape) > 1:
             m, n = Cp.shape
             p, q = e.shape
+
             if n != q:
+                print(f"ERROR CREATE CIPHERTEXT: Cp.shape[1] = {n} != e.shape[1] = {q}. --> Error from create Matrix Cp")
                 return None
+            
             y = np.zeros((p, n))
             for i in range(m):
                 for j in range(n):
@@ -157,7 +249,8 @@ def cipherText(Cp, e):
             for i in range(m, p):
                 for j in range(n):
                     y[i][j] = e[i][j]
-            print(f"\t   --> Successfully create generated ciphertext y = Cp + e")
+
+            print(f"\t   --> Successfully create generated ciphertext y[{y.shape[0]},{y.shape[1]}] = Cp + e")
             return y
     
     except ValueError as e:
@@ -168,7 +261,14 @@ def cipherText(Cp, e):
 
 def multi_matrix(a, b):
     try:
-        res = np.dot(a, b)
+        n = len(a)
+        m = b.shape[1]
+        q = 2 ** int(np.ceil(np.log2(max(len(a), len(b), len(a[0]), len(b[0])))))  
+        A_new = np.zeros((q, q))
+        A_new[:len(a), :len(a[0])] = a
+        B_new = np.zeros((q, q))
+        B_new[:len(b), :len(b[0])] = b
+        res = strassen_nxm(A_new, B_new, n, m)
         return res
     
     except ValueError as e:
@@ -177,67 +277,20 @@ def multi_matrix(a, b):
     return None
 
 
-#-------------------------------------- MULTIPROCESSING ----------------------------------------------
-def get_input_data(key):
+#-------------------------------------- STRASSEN ----------------------------------------------
+def get_strassen(res):
     try:
-        text = key[0][0]   
-        data_line = key[0][1]   
-        matrix_text = key[0][2]   
-        already_assigned = key[0][3]  
-        t = key[0][4]   
-        k = key[0][5]   
-        n = key[0][6]   
-        encoder = key[0][7]  
-        return text, data_line, matrix_text, already_assigned, t, k, n, encoder
+        p1 = res[0]
+        p2 = res[1]
+        p3 = res[2]
+        p4 = res[3]
+        p5 = res[4]
+        p6 = res[5]
+        p7 = res[6]
+        return p1, p2, p3, p4, p5, p6, p7
     
     except ValueError as e:
-        print(f"Error from 'get_input_data': {e}")
+        print(f"Error from 'get_strassen': {e}")
 
     return None
 
-
-def get_key_data(key_):
-    try: 
-        private_key = key_[0][0]
-        public_key = key_[0][1]
-        orther = key_[0][2]
-        return private_key, public_key, orther
-
-    except ValueError as e:
-        print(f"Error from 'get_key_data': {e}")
-        
-    return None
-
-
-def get_encrypt_data(key_):
-    try:
-        direc_cipherText = key_[0]
-        return direc_cipherText
-
-    except ValueError as e:
-        print(f"Error from 'get_encrypt_data': {e}")
-        
-    return None
-
-
-def get_decrypt_data(key_):
-    try:
-        direc_plaintText = key_[0]
-        return direc_plaintText
-    
-    except ValueError as e:
-        print(f"Error from 'get_decrypt_data': {e}")
-        
-    return None
-
-
-def get_backtext(backtext):
-    try:
-        text_recovery = backtext[0][0]
-        texts = backtext[0][1]
-        return text_recovery, texts
-    
-    except ValueError as e:
-        print(f"Error from 'get_backtext': {e}")
-        
-    return None
