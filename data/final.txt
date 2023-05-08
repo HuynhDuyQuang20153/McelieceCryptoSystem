@@ -1,4 +1,0 @@
-AJAX là một kỹ thuật cho phép các trang web tương tác với máy chủ mà không cần phải tải lại trang web. 
-Trong AJAX, JavaScript được sử dụng để gửi các yêu cầu đến máy chủ và xử lý các phản hồi từ máy chủ. 
-Python có thể được sử dụng để xử lý các yêu cầu đó và trả về các phản hồi. 
-Ví dụ, bạn có thể sử dụng Flask, một framework Python để xây dựng các API và xử lý các yêu cầu từ JavaScript.
